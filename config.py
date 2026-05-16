@@ -28,8 +28,18 @@ TF_ENTRY = '1h'
 TF_HTF   = '4h'
 
 # ── Leverage / margin ────────────────────────────────────────────────────
-LEVERAGE     = 5
+LEVERAGE     = int(os.getenv('BOT_LEVERAGE', '2'))   # default 2× for live safety
 MARGIN_TYPE  = 'ISOLATED'
+
+# ── Safety guards ────────────────────────────────────────────────────────
+# Hard USD cap on a single position — overrides MAX_POSITION_PCT
+MAX_POSITION_USD = float(os.getenv('BOT_MAX_POS_USD', '500'))
+
+# Minimum balance required to trade
+MIN_BALANCE_USD  = float(os.getenv('BOT_MIN_BALANCE', '100'))
+
+# Kill switch — if this file exists, bot closes positions and stops
+KILL_SWITCH_FILE = '.kill_switch'
 
 # ── Trend filter (HTF = 4h) ──────────────────────────────────────────────
 HTF_EMA_FAST = 50
@@ -73,10 +83,10 @@ SCALE_OUT_AT_ATR      = 1.0
 SCALE_OUT_FRACTION    = 0.5
 
 # ── Risk management ──────────────────────────────────────────────────────
-RISK_PCT            = 0.02     # 2% — sized up because edge is real but infrequent
+RISK_PCT            = float(os.getenv('BOT_RISK_PCT', '0.005'))   # 0.5% default for live safety
 MAX_POSITION_PCT    = 0.30
 DAILY_LOSS_HALT_PCT = 0.03
-MAX_DD_HALT_PCT     = 0.15
+MAX_DD_HALT_PCT     = 0.10     # tightened from 0.15
 LOW_LIQ_UTC_HOURS   = {3, 4, 5}
 
 # ── Fees / loop ─────────────────────────────────────────────────────────
