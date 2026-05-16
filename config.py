@@ -60,8 +60,8 @@ SHORT_VOL_MULT      = 1.2   # lowered from 2.0 — 2.0× vol is too rare
 SHORTS_ONLY         = True
 
 # ── Exits ───────────────────────────────────────────────────────────────
-ATR_SL_MULT           = 2.0     # tighter (was 2.5) — failed breakouts cut fast
-ATR_TP_MULT           = 6.0     # wider (was 5.0) — let winners run, 1:3 R:R
+ATR_SL_MULT           = 2.0     # sweep-validated
+ATR_TP_MULT           = 4.0     # v2: tighter from 6.0 — 1:2 R:R, same PF as TP=6 in backtest but +1 trade
 CHANDELIER_PERIOD     = 20
 CHANDELIER_ATR_MULT   = 3.0
 TRAIL_BE_AT_ATR       = 1.0
