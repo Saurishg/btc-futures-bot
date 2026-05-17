@@ -1,9 +1,13 @@
 """
-Dual-Edge Breakout Strategy — 1H BTCUSDT Futures.
+Dual-Edge Breakout + Liquidity Sweep Strategy — 1H BTCUSDT Futures.
 
-Two validated edges from 5-year deep dive:
+Breakout edges (5y validated):
   LONG:  4H bullish + ADX [30-50) + body ≥ 1.5×ATR + vol ≥ 1.2×MA20 + Donchian break
   SHORT: 4H bearish + ADX [45-65) + body ≥ 1.0×ATR + vol ≥ 2.0×MA20 + Donchian break
+
+Liquidity sweep edges:
+  SHORT: 4H bearish + wick pierces N-bar swing high + closes below it (stop hunt reversal)
+  LONG:  4H bullish + wick pierces N-bar swing low  + closes above it (stop hunt reversal)
 """
 from indicators import ema, rsi, atr, adx
 import config as cfg
@@ -82,6 +86,14 @@ def compute_signal(klines: list, htf_klines: list) -> dict:
         and vol_ratio >= cfg.SHORT_VOL_MULT
     )
 
+    sweep_params = {
+        'sweep_lookback':     getattr(cfg, 'SWEEP_LOOKBACK', 20),
+        'sweep_wick_atr_min': getattr(cfg, 'SWEEP_WICK_ATR_MIN', 0.25),
+    }
+    sw_long, sw_short, sw_high, sw_low = liquidity_sweep(
+        highs, lows, closes, opens, atr_val, direction, sweep_params,
+    )
+
     return {
         'price': price, 'atr': atr_val,
         'rsi': rsi_val, 'adx': adx_val, 'adx_rising': adx_up,
@@ -89,6 +101,9 @@ def compute_signal(klines: list, htf_klines: list) -> dict:
         'donchian_high': donchian_high, 'donchian_low': donchian_low,
         'body_atr': body_atr, 'vol_ratio': vol_ratio,
         'long_signal': long_signal, 'short_signal': short_signal,
+        'sweep_long_signal': sw_long, 'sweep_short_signal': sw_short,
+        'sweep_high': sw_high, 'sweep_low': sw_low,
+        'wick_high': highs[-1], 'wick_low': lows[-1],
     }
 
 
@@ -146,6 +161,10 @@ def compute_signal_sym(klines: list, htf_klines: list, sym_params: dict) -> dict
         and vol_ratio >= sym_params['short_vol_mult']
     )
 
+    sw_long, sw_short, sw_high, sw_low = liquidity_sweep(
+        highs, lows, closes, opens, atr_val, direction, sym_params,
+    )
+
     return {
         'price': price, 'atr': atr_val,
         'rsi': rsi_val, 'adx': adx_val, 'adx_rising': adx_up,
@@ -153,7 +172,58 @@ def compute_signal_sym(klines: list, htf_klines: list, sym_params: dict) -> dict
         'donchian_high': donchian_high, 'donchian_low': donchian_low,
         'body_atr': body_atr, 'vol_ratio': vol_ratio,
         'long_signal': long_signal, 'short_signal': short_signal,
+        'sweep_long_signal': sw_long, 'sweep_short_signal': sw_short,
+        'sweep_high': sw_high, 'sweep_low': sw_low,
+        'wick_high': highs[-1], 'wick_low': lows[-1],
     }
+
+
+def liquidity_sweep(
+    highs: list, lows: list, closes: list, opens: list,
+    atr_val: float, direction: str, params: dict,
+) -> tuple:
+    """
+    Detect a stop-hunt candle: price wicks beyond a swing level then rejects.
+
+    Bearish sweep (SHORT): wick pierces N-bar swing high, candle closes below it.
+    Bullish sweep (LONG):  wick pierces N-bar swing low,  candle closes above it.
+
+    Returns (sweep_long, sweep_short, swing_high_used, swing_low_used).
+    SL for a sweep entry sits just beyond the wick (tighter than fixed ATR SL).
+    """
+    n        = params.get('sweep_lookback', 20)
+    wick_min = params.get('sweep_wick_atr_min', 0.25)
+
+    if len(highs) < n + 2 or atr_val <= 0:
+        return False, False, 0.0, 0.0
+
+    swing_high = max(highs[-n - 1:-1])
+    swing_low  = min(lows[-n - 1:-1])
+
+    cur_high  = highs[-1]
+    cur_low   = lows[-1]
+    cur_close = closes[-1]
+    cur_open  = opens[-1]
+
+    # How far the wick pierced beyond the swing level
+    above_wick = cur_high - swing_high  # positive → wicked above swing high
+    below_wick = swing_low - cur_low    # positive → wicked below swing low
+
+    sweep_short = (
+        direction == 'SHORT'
+        and above_wick >= wick_min * atr_val   # meaningful wick above swing high
+        and cur_close < swing_high              # rejection: closed back below level
+        and cur_close < cur_open                # bearish body confirms reversal
+    )
+
+    sweep_long = (
+        direction == 'LONG'
+        and below_wick >= wick_min * atr_val   # meaningful wick below swing low
+        and cur_close > swing_low              # rejection: closed back above level
+        and cur_close > cur_open               # bullish body confirms reversal
+    )
+
+    return sweep_long, sweep_short, swing_high, swing_low
 
 
 def chandelier_stop(highs: list, lows: list, atr_val: float, side: str) -> float:

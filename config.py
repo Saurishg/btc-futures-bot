@@ -87,6 +87,13 @@ CHANDELIER_ATR_MULT   = 3.0
 TRAIL_BE_AT_ATR       = 1.0
 CHANDELIER_ACTIVATE_AT_ATR = 1.5
 
+# ── Liquidity sweep edge ─────────────────────────────────────────────────
+# Detects stop-hunt candles: price wicks beyond N-bar swing high/low then rejects.
+# SHORT sweep: wick above swing high + bearish close below it = reversal short.
+# LONG  sweep: wick below swing low  + bullish close above it = reversal long.
+SWEEP_LOOKBACK      = 20    # bars to look back for swing high/low
+SWEEP_WICK_ATR_MIN  = 0.25  # wick must pierce at least 0.25×ATR beyond swing level
+
 # ── Scale-out ────────────────────────────────────────────────────────────
 SCALE_OUT_ENABLED     = True
 SCALE_OUT_AT_ATR      = 1.0
@@ -120,6 +127,9 @@ SYMBOLS = {
         'long_adx_min': 40,    'long_adx_max': 55,
         'long_body_atr_min': 1.5, 'long_vol_mult': 1.2,
         'long_sl_mult': 2.0,   'long_tp_mult': 6.0,
+        # liquidity sweep
+        'sweep_lookback': 20, 'sweep_wick_atr_min': 0.25,
+        'sweep_short_tp_mult': 3.0, 'sweep_long_tp_mult': 5.0,
     },
     'ETHUSDT': {
         'enabled': True,
@@ -127,6 +137,9 @@ SYMBOLS = {
         'short_adx_min': 45,   'short_adx_max': 55,
         'short_body_atr_min': 0.5, 'short_vol_mult': 1.0,
         'short_sl_mult': 1.5,  'short_tp_mult': 3.0,
+        # liquidity sweep
+        'sweep_lookback': 20, 'sweep_wick_atr_min': 0.20,
+        'sweep_short_tp_mult': 2.5,
     },
     'SOLUSDT': {
         'enabled': True,
@@ -134,6 +147,9 @@ SYMBOLS = {
         'short_adx_min': 50,   'short_adx_max': 55,
         'short_body_atr_min': 0.8, 'short_vol_mult': 1.0,
         'short_sl_mult': 2.0,  'short_tp_mult': 4.0,
+        # liquidity sweep
+        'sweep_lookback': 20, 'sweep_wick_atr_min': 0.25,
+        'sweep_short_tp_mult': 3.0,
     },
 }
 MAX_CONCURRENT_POSITIONS = 2
