@@ -127,9 +127,6 @@ SYMBOLS = {
         'long_adx_min': 40,    'long_adx_max': 55,
         'long_body_atr_min': 1.5, 'long_vol_mult': 1.2,
         'long_sl_mult': 2.0,   'long_tp_mult': 6.0,
-        # liquidity sweep
-        'sweep_lookback': 20, 'sweep_wick_atr_min': 0.25,
-        'sweep_short_tp_mult': 3.0, 'sweep_long_tp_mult': 5.0,
     },
     'ETHUSDT': {
         'enabled': True,
@@ -137,9 +134,6 @@ SYMBOLS = {
         'short_adx_min': 45,   'short_adx_max': 55,
         'short_body_atr_min': 0.5, 'short_vol_mult': 1.0,
         'short_sl_mult': 1.5,  'short_tp_mult': 3.0,
-        # liquidity sweep
-        'sweep_lookback': 20, 'sweep_wick_atr_min': 0.20,
-        'sweep_short_tp_mult': 2.5,
     },
     'SOLUSDT': {
         'enabled': True,
@@ -147,9 +141,6 @@ SYMBOLS = {
         'short_adx_min': 50,   'short_adx_max': 55,
         'short_body_atr_min': 0.8, 'short_vol_mult': 1.0,
         'short_sl_mult': 2.0,  'short_tp_mult': 4.0,
-        # liquidity sweep
-        'sweep_lookback': 20, 'sweep_wick_atr_min': 0.25,
-        'sweep_short_tp_mult': 3.0,
     },
 }
 MAX_CONCURRENT_POSITIONS = 2

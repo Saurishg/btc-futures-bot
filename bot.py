@@ -260,8 +260,7 @@ def tick_symbol(
     log.info(
         f'[{sym}] Price=${s["price"]:,.2f} | dir={s["direction"]} | RSI={s["rsi"]:.0f} | '
         f'ADX={s["adx"]:.0f}{"up" if s["adx_rising"] else ""} | '
-        f'long={s["long_signal"]} short={s["short_signal"]} '
-        f'sw_long={s.get("sweep_long_signal",False)} sw_short={s.get("sweep_short_signal",False)}'
+        f'long_sig={s["long_signal"]} short_sig={s["short_signal"]}'
     )
 
     snap = {
@@ -271,8 +270,6 @@ def tick_symbol(
         'donchian_high': s['donchian_high'], 'donchian_low': s['donchian_low'],
         'body_atr': s['body_atr'], 'vol_ratio': s['vol_ratio'],
         'long_signal': s['long_signal'], 'short_signal': s['short_signal'],
-        'sweep_long_signal': s.get('sweep_long_signal', False),
-        'sweep_short_signal': s.get('sweep_short_signal', False),
         'has_pos': pos['side'] != 'NONE',
         'pos_side': pos['side'],
         'pos_qty': pos.get('qty', 0),
@@ -377,9 +374,8 @@ def tick_symbol(
         log.info(f'[{sym}] Max concurrent positions ({cfg.MAX_CONCURRENT_POSITIONS}) reached, skipping entry')
         return snap
 
-    long_signal  = s['long_signal']  or s.get('sweep_long_signal', False)
-    short_signal = s['short_signal'] or s.get('sweep_short_signal', False)
-    is_sweep     = (not s['long_signal'] and not s['short_signal'])  # pure sweep entry
+    long_signal  = s['long_signal']
+    short_signal = s['short_signal']
 
     if not (long_signal or short_signal):
         return snap
@@ -389,35 +385,20 @@ def tick_symbol(
     atr_val = s['atr']
 
     if side == 'LONG':
-        if is_sweep:
-            # SL just below the wick that swept the swing low (tighter, precise)
-            sl_p    = s['wick_low'] - 0.15 * atr_val
-            tp_mult = sym_params.get('sweep_long_tp_mult', cfg.LONG_ATR_TP_MULT)
-            tp_p    = price + tp_mult * atr_val
-            sl_mult = (price - sl_p) / atr_val
-        else:
-            sl_mult = sym_params.get('long_sl_mult', cfg.LONG_ATR_SL_MULT)
-            tp_mult = sym_params.get('long_tp_mult', cfg.LONG_ATR_TP_MULT)
-            sl_p = price - sl_mult * atr_val
-            tp_p = price + tp_mult * atr_val
+        sl_mult = sym_params.get('long_sl_mult', cfg.LONG_ATR_SL_MULT)
+        tp_mult = sym_params.get('long_tp_mult', cfg.LONG_ATR_TP_MULT)
+        sl_p = price - sl_mult * atr_val
+        tp_p = price + tp_mult * atr_val
         order_side = 'BUY'
         close_side = 'SELL'
     else:
-        if is_sweep:
-            # SL just above the wick that swept the swing high (tighter, precise)
-            sl_p    = s['wick_high'] + 0.15 * atr_val
-            tp_mult = sym_params.get('sweep_short_tp_mult', cfg.ATR_TP_MULT)
-            tp_p    = price - tp_mult * atr_val
-            sl_mult = (sl_p - price) / atr_val
-        else:
-            sl_mult = sym_params.get('short_sl_mult', cfg.ATR_SL_MULT)
-            tp_mult = sym_params.get('short_tp_mult', cfg.ATR_TP_MULT)
-            sl_p = price + sl_mult * atr_val
-            tp_p = price - tp_mult * atr_val
+        sl_mult = sym_params.get('short_sl_mult', cfg.ATR_SL_MULT)
+        tp_mult = sym_params.get('short_tp_mult', cfg.ATR_TP_MULT)
+        sl_p = price + sl_mult * atr_val
+        tp_p = price - tp_mult * atr_val
         order_side = 'SELL'
         close_side = 'BUY'
 
-    entry_type = 'SWEEP' if is_sweep else 'BREAKOUT'
     qty = compute_qty(bal, price, atr_val, sl_mult)
 
     qty_usd_cap = cfg.MAX_POSITION_USD / price
@@ -471,8 +452,8 @@ def tick_symbol(
         'stop_loss': sl_p, 'take_profit': tp_p,
         'entered_at': datetime.now().isoformat(),
     })
-    log_pnl('OPEN', side, price, qty, 0, entry_type, sym)
-    log.info(f'[{sym}] OPEN {side} [{entry_type}] {qty:.3f} @ ${price:,.2f} | SL ${sl_p:,.2f} | TP ${tp_p:,.2f} | R:R 1:{tp_mult/sl_mult:.1f}')
+    log_pnl('OPEN', side, price, qty, 0, 'entry', sym)
+    log.info(f'[{sym}] OPEN {side} {qty:.3f} @ ${price:,.2f} | SL ${sl_p:,.2f} | TP ${tp_p:,.2f}')
     return snap
 
 

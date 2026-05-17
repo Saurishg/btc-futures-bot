@@ -86,14 +86,6 @@ def compute_signal(klines: list, htf_klines: list) -> dict:
         and vol_ratio >= cfg.SHORT_VOL_MULT
     )
 
-    sweep_params = {
-        'sweep_lookback':     getattr(cfg, 'SWEEP_LOOKBACK', 20),
-        'sweep_wick_atr_min': getattr(cfg, 'SWEEP_WICK_ATR_MIN', 0.25),
-    }
-    sw_long, sw_short, sw_high, sw_low = liquidity_sweep(
-        highs, lows, closes, opens, atr_val, direction, sweep_params,
-    )
-
     return {
         'price': price, 'atr': atr_val,
         'rsi': rsi_val, 'adx': adx_val, 'adx_rising': adx_up,
@@ -101,9 +93,6 @@ def compute_signal(klines: list, htf_klines: list) -> dict:
         'donchian_high': donchian_high, 'donchian_low': donchian_low,
         'body_atr': body_atr, 'vol_ratio': vol_ratio,
         'long_signal': long_signal, 'short_signal': short_signal,
-        'sweep_long_signal': sw_long, 'sweep_short_signal': sw_short,
-        'sweep_high': sw_high, 'sweep_low': sw_low,
-        'wick_high': highs[-1], 'wick_low': lows[-1],
     }
 
 
@@ -161,10 +150,6 @@ def compute_signal_sym(klines: list, htf_klines: list, sym_params: dict) -> dict
         and vol_ratio >= sym_params['short_vol_mult']
     )
 
-    sw_long, sw_short, sw_high, sw_low = liquidity_sweep(
-        highs, lows, closes, opens, atr_val, direction, sym_params,
-    )
-
     return {
         'price': price, 'atr': atr_val,
         'rsi': rsi_val, 'adx': adx_val, 'adx_rising': adx_up,
@@ -172,9 +157,6 @@ def compute_signal_sym(klines: list, htf_klines: list, sym_params: dict) -> dict
         'donchian_high': donchian_high, 'donchian_low': donchian_low,
         'body_atr': body_atr, 'vol_ratio': vol_ratio,
         'long_signal': long_signal, 'short_signal': short_signal,
-        'sweep_long_signal': sw_long, 'sweep_short_signal': sw_short,
-        'sweep_high': sw_high, 'sweep_low': sw_low,
-        'wick_high': highs[-1], 'wick_low': lows[-1],
     }
 
 
