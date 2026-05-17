@@ -51,8 +51,11 @@ def compute_signal(klines: list, htf_klines: list) -> dict:
     bull_candle = closes[-1] > opens[-1]
     bear_candle = closes[-1] < opens[-1]
 
-    # Volume ratio
-    vol_ma = sum(vols[-21:-1]) / 20 if len(vols) >= 21 else vols[-1]
+    # Volume ratio (20-bar MA of historical volumes, excluding current)
+    if len(vols) >= 21:
+        vol_ma = sum(vols[-21:-1]) / 20
+    else:
+        vol_ma = sum(vols[:-1]) / max(1, len(vols) - 1) if len(vols) > 1 else vols[-1]
     vol_ratio = vols[-1] / vol_ma if vol_ma > 0 else 1
 
     # ── LONG edge: moderate ADX + huge candle ────────────────────────
@@ -89,6 +92,70 @@ def compute_signal(klines: list, htf_klines: list) -> dict:
     }
 
 
+def compute_signal_sym(klines: list, htf_klines: list, sym_params: dict) -> dict:
+    """Per-symbol variant of compute_signal using sym_params for filter thresholds."""
+    closes = [float(k[4]) for k in klines]
+    highs  = [float(k[2]) for k in klines]
+    lows   = [float(k[3]) for k in klines]
+    opens  = [float(k[1]) for k in klines]
+    vols   = [float(k[5]) for k in klines]
+
+    htf_closes = [float(k[4]) for k in htf_klines]
+    direction  = htf_direction(htf_closes)
+
+    price   = closes[-1]
+    atr_val = atr(highs, lows, closes, cfg.ATR_PERIOD)
+    adx_val = adx(highs, lows, closes, cfg.ADX_PERIOD)
+    adx_up  = _adx_rising(highs, lows, closes, cfg.ADX_PERIOD, 5)
+    rsi_val = rsi(closes, cfg.RSI_PERIOD)
+
+    donchian_high = max(highs[-cfg.BREAKOUT_PERIOD-1:-1])
+    donchian_low  = min(lows[-cfg.BREAKOUT_PERIOD-1:-1])
+
+    body = abs(closes[-1] - opens[-1])
+    body_atr = body / atr_val if atr_val > 0 else 0
+    bull_candle = closes[-1] > opens[-1]
+    bear_candle = closes[-1] < opens[-1]
+
+    if len(vols) >= 21:
+        vol_ma = sum(vols[-21:-1]) / 20
+    else:
+        vol_ma = sum(vols[:-1]) / max(1, len(vols) - 1) if len(vols) > 1 else vols[-1]
+    vol_ratio = vols[-1] / vol_ma if vol_ma > 0 else 1
+
+    shorts_only = sym_params.get('shorts_only', True)
+
+    long_signal = (
+        not shorts_only
+        and direction == 'LONG'
+        and closes[-1] > donchian_high
+        and bull_candle
+        and sym_params['long_adx_min'] <= adx_val < sym_params['long_adx_max']
+        and adx_up
+        and body_atr >= sym_params['long_body_atr_min']
+        and vol_ratio >= sym_params['long_vol_mult']
+    )
+
+    short_signal = (
+        direction == 'SHORT'
+        and closes[-1] < donchian_low
+        and bear_candle
+        and sym_params['short_adx_min'] <= adx_val < sym_params['short_adx_max']
+        and adx_up
+        and body_atr >= sym_params['short_body_atr_min']
+        and vol_ratio >= sym_params['short_vol_mult']
+    )
+
+    return {
+        'price': price, 'atr': atr_val,
+        'rsi': rsi_val, 'adx': adx_val, 'adx_rising': adx_up,
+        'direction': direction,
+        'donchian_high': donchian_high, 'donchian_low': donchian_low,
+        'body_atr': body_atr, 'vol_ratio': vol_ratio,
+        'long_signal': long_signal, 'short_signal': short_signal,
+    }
+
+
 def chandelier_stop(highs: list, lows: list, atr_val: float, side: str) -> float:
     n = cfg.CHANDELIER_PERIOD
     if side == 'LONG':
@@ -96,8 +163,10 @@ def chandelier_stop(highs: list, lows: list, atr_val: float, side: str) -> float
     return min(lows[-n:]) + cfg.CHANDELIER_ATR_MULT * atr_val
 
 
-def compute_qty(equity: float, price: float, atr_val: float) -> float:
-    sl_distance = cfg.ATR_SL_MULT * atr_val
+def compute_qty(equity: float, price: float, atr_val: float, sl_mult: float = None) -> float:
+    if sl_mult is None:
+        sl_mult = cfg.ATR_SL_MULT
+    sl_distance = sl_mult * atr_val
     if sl_distance <= 0: return 0.0
     qty_risk = (equity * cfg.RISK_PCT) / sl_distance
     qty_cap  = (equity * cfg.MAX_POSITION_PCT) / price

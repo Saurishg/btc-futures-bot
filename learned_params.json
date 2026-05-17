@@ -1,0 +1,33 @@
+{
+  "adapt_version": 2,
+  "adapted_at": "2026-05-17T00:55:01.005460",
+  "window_months": 6,
+  "window_trades": 8,
+  "blend_weight": 0.2,
+  "confidence": "low",
+  "anchors": {
+    "SHORT_ADX_MIN": 45,
+    "SHORT_ADX_MAX": 70,
+    "SHORT_BODY_ATR_MIN": 0.6,
+    "SHORT_VOL_MULT": 1.2,
+    "ATR_SL_MULT": 2.0,
+    "ATR_TP_MULT": 4.0
+  },
+  "window_best": {
+    "SHORT_ADX_MIN": 40,
+    "SHORT_ADX_MAX": 60,
+    "SHORT_BODY_ATR_MIN": 0.8,
+    "SHORT_VOL_MULT": 1.0,
+    "ATR_SL_MULT": 1.5,
+    "ATR_TP_MULT": 4.0
+  },
+  "blended": {
+    "SHORT_ADX_MIN": 44,
+    "SHORT_ADX_MAX": 68,
+    "SHORT_BODY_ATR_MIN": 0.64,
+    "SHORT_VOL_MULT": 1.16,
+    "ATR_SL_MULT": 1.9,
+    "ATR_TP_MULT": 4.0
+  },
+  "why": "Window winner (n=8, PF=99.00) blended at 20% [low confidence]. Changes: SHORT_ADX_MAX: 70 \u2192 68; ATR_SL_MULT: 2.0 \u2192 1.9"
+}

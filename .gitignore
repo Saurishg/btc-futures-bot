@@ -1,0 +1,12 @@
+.env
+__pycache__/
+*.pyc
+bot.log
+*.log
+indicators.json
+state_*.json
+pnl.json
+.peak_equity
+agentdb.rvf
+agentdb.rvf.lock
+ruvector.db
