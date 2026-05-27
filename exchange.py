@@ -17,11 +17,20 @@ def _headers():
 
 
 def fapi_get(path, params=None, signed=True):
-    p = dict(params or {})
-    if signed: p = _sign(p)
-    r = requests.get(cfg.BASE_URL + path, params=p, headers=_headers(), timeout=10)
-    r.raise_for_status()
-    return r.json()
+    # Retry transient failures (testnet 5xx, -1021 timestamp skew, DNS/network
+    # blips). GETs are idempotent; re-sign each attempt for a fresh timestamp.
+    last = None
+    for attempt in range(3):
+        p = dict(params or {})
+        if signed: p = _sign(p)
+        try:
+            r = requests.get(cfg.BASE_URL + path, params=p, headers=_headers(), timeout=10)
+            r.raise_for_status()
+            return r.json()
+        except requests.RequestException as e:
+            last = e
+            time.sleep(0.5 * (attempt + 1))
+    raise last
 
 
 def fapi_post(path, params=None):
@@ -115,7 +124,7 @@ def stop_market_order(side: str, stop_price: float, qty: float, symbol: str = No
         'symbol': _sym(symbol), 'side': side,
         'type': 'STOP_MARKET', 'stopPrice': f'{stop_price:.2f}',
         'quantity': f'{qty:.3f}', 'reduceOnly': 'true',
-        'timeInForce': 'GTE_GTC',
+        'timeInForce': 'GTC',
     })
 
 
@@ -124,7 +133,7 @@ def take_profit_order(side: str, stop_price: float, qty: float, symbol: str = No
         'symbol': _sym(symbol), 'side': side,
         'type': 'TAKE_PROFIT_MARKET', 'stopPrice': f'{stop_price:.2f}',
         'quantity': f'{qty:.3f}', 'reduceOnly': 'true',
-        'timeInForce': 'GTE_GTC',
+        'timeInForce': 'GTC',
     })
 
 

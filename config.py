@@ -121,8 +121,10 @@ SYMBOLS = {
     'BTCUSDT': {
         'enabled': True,
         'shorts_only': False,
-        'short_adx_min': 44,   'short_adx_max': 68,
-        'short_body_atr_min': 0.64, 'short_vol_mult': 1.16,
+        # SHORT loosened 2026-05-27 (freq_sweep 5y): ADX[43-70) body>=0.6 ~= 45 trades,
+        # PF ~1.6, 5/6 profitable years (was [44-68) body 0.64 ~= 19 trades).
+        'short_adx_min': 43,   'short_adx_max': 70,
+        'short_body_atr_min': 0.6, 'short_vol_mult': 1.16,
         'short_sl_mult': 1.9,  'short_tp_mult': 4.0,
         'long_adx_min': 40,    'long_adx_max': 55,
         'long_body_atr_min': 1.5, 'long_vol_mult': 1.2,

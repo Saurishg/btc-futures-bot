@@ -45,6 +45,10 @@ PNL_FILE   = Path(__file__).parent / 'pnl.json'
 LOCK_FILE  = Path(__file__).parent / '.bot_lock'
 PEAK_FILE  = Path(__file__).parent / '.peak_equity'
 
+# Last closed 1h bar (open_time ms) we opened on, per symbol — guards against
+# re-entering the same bar after a stop-out within the hour (backtest enters once per bar).
+_last_entry_bar: dict = {}
+
 
 # ── Per-symbol state ─────────────────────────────────────────────────────
 
@@ -252,6 +256,12 @@ def tick_symbol(
         log.warning(f'[{sym}] Not enough candles')
         return None
 
+    # Binance returns the in-progress candle as the last element; drop it so we
+    # evaluate on closed bars only. The forming candle's partial volume/body would
+    # never clear the filters and diverges from the closed-bar backtest.
+    klines_1h = klines_1h[:-1]
+    klines_4h = klines_4h[:-1]
+
     s = compute_signal_sym(klines_1h, klines_4h, sym_params)
     if pos is None:
         pos = get_position(sym)
@@ -380,6 +390,10 @@ def tick_symbol(
     if not (long_signal or short_signal):
         return snap
 
+    bar_ms = int(klines_1h[-1][0])
+    if _last_entry_bar.get(sym) == bar_ms:
+        return snap  # already opened on this closed bar — avoid same-bar re-entry churn
+
     side = 'LONG' if long_signal else 'SHORT'
     price   = s['price']
     atr_val = s['atr']
@@ -452,6 +466,7 @@ def tick_symbol(
         'stop_loss': sl_p, 'take_profit': tp_p,
         'entered_at': datetime.now().isoformat(),
     })
+    _last_entry_bar[sym] = bar_ms
     log_pnl('OPEN', side, price, qty, 0, 'entry', sym)
     log.info(f'[{sym}] OPEN {side} {qty:.3f} @ ${price:,.2f} | SL ${sl_p:,.2f} | TP ${tp_p:,.2f}')
     return snap
