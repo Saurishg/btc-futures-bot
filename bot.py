@@ -305,6 +305,32 @@ def tick_symbol(
         highs = [float(k[2]) for k in klines_1h]
         lows  = [float(k[3]) for k in klines_1h]
         sl = state.get('stop_loss', entry)
+        close_side = 'SELL' if side == 'LONG' else 'BUY'
+
+        # Bot-side (soft) stop/TP — this venue rejects server-side conditional
+        # orders, so when soft_stop is set we close at market on an SL/TP cross.
+        # Uses live mark price (refreshes each tick), not the closed-candle close.
+        if state.get('soft_stop'):
+            live = pos.get('mark_price') or price
+            sl_lvl, tp_lvl = state.get('stop_loss'), state.get('take_profit')
+            hit = None
+            if side == 'LONG':
+                if sl_lvl and live <= sl_lvl:    hit = ('SL', sl_lvl)
+                elif tp_lvl and live >= tp_lvl:  hit = ('TP', tp_lvl)
+            else:
+                if sl_lvl and live >= sl_lvl:    hit = ('SL', sl_lvl)
+                elif tp_lvl and live <= tp_lvl:  hit = ('TP', tp_lvl)
+            if hit:
+                reason, lvl = hit
+                try:
+                    market_order(close_side, qty, reduce_only=True, symbol=sym)
+                    pnl = pos.get('unrealized_pnl', 0)
+                    log_pnl('CLOSE', side, live, qty, pnl, reason, sym)
+                    save_state(sym, {})
+                    log.info(f'[{sym}] {reason} (bot-side) {side} {qty:.3f} @ ${live:,.2f} | lvl ${lvl:,.2f} | PnL ${pnl:+,.2f}')
+                except Exception as e:
+                    log.error(f'[{sym}] Bot-side {reason} close failed: {e}')
+                return snap
 
         if side == 'LONG':
             profit_atr = (price - entry) / s['atr'] if s['atr'] > 0 else 0
@@ -327,8 +353,6 @@ def tick_symbol(
             if entry - price >= cfg.TRAIL_BE_AT_ATR * s['atr']:
                 new_sl = min(new_sl, entry) if new_sl > 0 else entry
 
-        close_side = 'SELL' if side == 'LONG' else 'BUY'
-
         # Scale-out
         if cfg.SCALE_OUT_ENABLED and not state.get('scaled_out') and profit_atr >= cfg.SCALE_OUT_AT_ATR:
             scale_qty = round(qty * cfg.SCALE_OUT_FRACTION, 3)
@@ -344,17 +368,21 @@ def tick_symbol(
                 except Exception as e:
                     log.warning(f'[{sym}] Scale-out failed: {e}')
 
-        # Update server-side SL if it moved meaningfully
+        # Trail the stop. The bot-side monitor reads state['stop_loss'] directly;
+        # only refresh server-side orders when those are the ones in use.
         if abs(new_sl - sl) > s['atr'] * 0.1:
             state['stop_loss'] = new_sl
             save_state(sym, state)
-            try:
-                cancel_all_orders(symbol=sym)
-                stop_market_order(close_side, round(new_sl, 2), qty, symbol=sym)
-                take_profit_order(close_side, round(state['take_profit'], 2), qty, symbol=sym)
-                log.info(f'[{sym}] Trail: SL ${sl:,.2f} -> ${new_sl:,.2f}')
-            except Exception as e:
-                log.warning(f'[{sym}] SL update failed: {e}')
+            if state.get('soft_stop'):
+                log.info(f'[{sym}] Trail (bot-side): SL ${sl:,.2f} -> ${new_sl:,.2f}')
+            else:
+                try:
+                    cancel_all_orders(symbol=sym)
+                    stop_market_order(close_side, round(new_sl, 2), qty, symbol=sym)
+                    take_profit_order(close_side, round(state['take_profit'], 2), qty, symbol=sym)
+                    log.info(f'[{sym}] Trail: SL ${sl:,.2f} -> ${new_sl:,.2f}')
+                except Exception as e:
+                    log.warning(f'[{sym}] SL update failed: {e}')
 
         # Regime flip -> exit
         flip = (side == 'LONG' and s['direction'] == 'SHORT') or \
@@ -434,41 +462,34 @@ def tick_symbol(
         log.error(f'[{sym}] Open failed: {e}')
         return snap
 
-    # Place server-side SL + TP — CRITICAL: if SL fails, emergency close
-    sl_placed = False
+    # Protection: try server-side SL/TP first; if the venue rejects conditional
+    # orders (e.g. -4120 on testnet), fall back to bot-side monitoring — the
+    # in-position branch market-closes on an SL/TP cross. No emergency close.
+    server_sl = False
     try:
         sl_result = stop_market_order(close_side, round(sl_p, 2), qty, symbol=sym)
-        if sl_result.get('orderId'):
-            sl_placed = True
-        else:
-            log.error(f'[{sym}] SL order rejected: {sl_result}')
+        server_sl = bool(sl_result.get('orderId'))
+        if not server_sl:
+            log.warning(f'[{sym}] Server-side SL rejected ({sl_result.get("msg") or sl_result}) — using bot-side stop')
     except Exception as e:
-        log.error(f'[{sym}] SL placement EXCEPTION: {e}')
+        log.warning(f'[{sym}] Server-side SL exception ({e}) — using bot-side stop')
 
-    if not sl_placed:
-        log.error(f'[{sym}] SL FAILED TO PLACE — emergency closing position')
+    if server_sl:
         try:
-            market_order(close_side, qty, reduce_only=True, symbol=sym)
-            log_pnl('CLOSE', side, price, qty, 0, 'SL_FAILED', sym)
-            save_state(sym, {})
-            log.warning(f'[{sym}] Position emergency-closed due to missing SL')
+            take_profit_order(close_side, round(tp_p, 2), qty, symbol=sym)
         except Exception as e:
-            log.critical(f'[{sym}] EMERGENCY CLOSE FAILED — POSITION UNPROTECTED: {e}')
-        return snap
-
-    try:
-        take_profit_order(close_side, round(tp_p, 2), qty, symbol=sym)
-    except Exception as e:
-        log.warning(f'[{sym}] TP placement failed (SL is in place, continuing): {e}')
+            log.warning(f'[{sym}] TP placement failed (SL in place, continuing): {e}')
 
     save_state(sym, {
         'side': side, 'entry_price': price, 'qty': qty,
         'stop_loss': sl_p, 'take_profit': tp_p,
+        'soft_stop': not server_sl,
         'entered_at': datetime.now().isoformat(),
     })
     _last_entry_bar[sym] = bar_ms
     log_pnl('OPEN', side, price, qty, 0, 'entry', sym)
-    log.info(f'[{sym}] OPEN {side} {qty:.3f} @ ${price:,.2f} | SL ${sl_p:,.2f} | TP ${tp_p:,.2f}')
+    mode = 'server-side SL/TP' if server_sl else 'bot-side SL/TP (soft)'
+    log.info(f'[{sym}] OPEN {side} {qty:.3f} @ ${price:,.2f} | SL ${sl_p:,.2f} | TP ${tp_p:,.2f} | {mode}')
     return snap
 
 
