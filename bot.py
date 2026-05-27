@@ -267,6 +267,13 @@ def tick_symbol(
         pos = get_position(sym)
     state = load_state(sym)
 
+    # Reconcile: exchange shows flat but we still hold state -> the position was
+    # closed outside the bot (server-side SL/TP fill on live, or manual). Clear it.
+    if pos['side'] == 'NONE' and state.get('side'):
+        log.warning(f'[{sym}] Reconcile: position closed externally (was {state["side"]} {state.get("qty")}); clearing stale state')
+        save_state(sym, {})
+        state = {}
+
     log.info(
         f'[{sym}] Price=${s["price"]:,.2f} | dir={s["direction"]} | RSI={s["rsi"]:.0f} | '
         f'ADX={s["adx"]:.0f}{"up" if s["adx_rising"] else ""} | '
@@ -473,6 +480,18 @@ def tick_symbol(
             log.warning(f'[{sym}] Server-side SL rejected ({sl_result.get("msg") or sl_result}) — using bot-side stop')
     except Exception as e:
         log.warning(f'[{sym}] Server-side SL exception ({e}) — using bot-side stop')
+
+    # Real money must have a hard, server-side stop. On live, if the venue
+    # rejected it, do NOT fall back to a soft stop — close immediately.
+    if not server_sl and cfg.ENV == 'live':
+        log.critical(f'[{sym}] LIVE + no server-side SL — emergency closing (refusing soft stop on real money)')
+        try:
+            market_order(close_side, qty, reduce_only=True, symbol=sym)
+            log_pnl('CLOSE', side, price, qty, 0, 'SL_FAILED_LIVE', sym)
+            save_state(sym, {})
+        except Exception as e:
+            log.critical(f'[{sym}] EMERGENCY CLOSE FAILED — POSITION UNPROTECTED: {e}')
+        return snap
 
     if server_sl:
         try:
