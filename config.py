@@ -121,9 +121,12 @@ SYMBOLS = {
     'BTCUSDT': {
         'enabled': True,
         'shorts_only': False,
-        # SHORT loosened 2026-05-27 (freq_sweep 5y): ADX[43-70) body>=0.6 ~= 45 trades,
-        # PF ~1.6, 5/6 profitable years (was [44-68) body 0.64 ~= 19 trades).
-        'short_adx_min': 43,   'short_adx_max': 70,
+        # SHORT (refined 2026-05-28 after current-market study): ADX[40-70) body>=0.6.
+        # 5y validated: 53 trades, WR 83%, PF 1.84, +5.2% return, 4/6 profitable yrs —
+        # the optimal ADX band; [43-70) gave PF 1.55 / +3.1%. Current regime is LONG-
+        # dominant with ADX p90~41, so the [40,43) zone matters for catching the
+        # marginal SHORT setups when regime shifts back.
+        'short_adx_min': 40,   'short_adx_max': 70,
         'short_body_atr_min': 0.6, 'short_vol_mult': 1.16,
         'short_sl_mult': 1.9,  'short_tp_mult': 4.0,
         'long_adx_min': 40,    'long_adx_max': 55,
